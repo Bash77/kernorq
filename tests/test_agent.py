@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
+import pytest
 from app.tools import inspect_project_workspace
-from app.agent import root_agent, MODEL_NAME, AGENT_INSTRUCTION
+from app.agent import (
+    root_agent,
+    MODEL_NAME,
+    AGENT_INSTRUCTION,
+    validate_and_get_model_name,
+    MINIMUM_MODEL_VERSION,
+)
 from app import app
 
 
@@ -61,3 +69,36 @@ def test_root_agent_properties():
 def test_adk_app_structure():
     assert app.name == "app"
     assert app.root_agent == root_agent
+
+
+def test_model_compliance():
+    # Verify the currently configured production model is Gemini 3.5+
+    assert MODEL_NAME == "gemini-3.5-flash"
+    assert root_agent.model == "gemini-3.5-flash"
+    assert "2.5" not in MODEL_NAME
+
+
+def test_model_validation_rejects_sub_3_5(monkeypatch):
+    monkeypatch.setenv("MODEL_NAME", "gemini-2.5-flash")
+    with pytest.raises(ValueError, match="not compliant"):
+        validate_and_get_model_name()
+
+    monkeypatch.setenv("MODEL_NAME", "gemini-2.0-flash")
+    with pytest.raises(ValueError, match="not compliant"):
+        validate_and_get_model_name()
+
+    monkeypatch.setenv("MODEL_NAME", "gemini-1.5-pro")
+    with pytest.raises(ValueError, match="not compliant"):
+        validate_and_get_model_name()
+
+
+def test_model_validation_accepts_compliant_models(monkeypatch):
+    monkeypatch.setenv("MODEL_NAME", "gemini-3.5-flash")
+    assert validate_and_get_model_name() == "gemini-3.5-flash"
+
+    monkeypatch.setenv("MODEL_NAME", "gemini-3.6-flash")
+    assert validate_and_get_model_name() == "gemini-3.6-flash"
+
+    monkeypatch.setenv("MODEL_NAME", "gemini-3.7-flash")
+    assert validate_and_get_model_name() == "gemini-3.7-flash"
+
