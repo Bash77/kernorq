@@ -38,6 +38,13 @@ from app.orchestration.recovery import (
     recover_task,
 )
 from app.orchestration.orchestrator import ExecutionOrchestrator, OrchestrationError
+from app.orchestration.planner import (
+    ExecutionPlan,
+    InvalidPlanError,
+    PlannerError,
+    TaskPlan,
+    create_execution_from_plan,
+)
 
 __all__ = [
     # State
@@ -78,6 +85,12 @@ __all__ = [
     # Orchestrator
     "ExecutionOrchestrator",
     "OrchestrationError",
+    # Planner
+    "create_execution_from_plan",
+    "TaskPlan",
+    "ExecutionPlan",
+    "PlannerError",
+    "InvalidPlanError",
 ]
 
 
