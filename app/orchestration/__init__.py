@@ -37,6 +37,7 @@ from app.orchestration.recovery import (
     classify_failure,
     recover_task,
 )
+from app.orchestration.orchestrator import ExecutionOrchestrator, OrchestrationError
 
 __all__ = [
     # State
@@ -74,6 +75,9 @@ __all__ = [
     "RecoveryAction",
     "RecoveryError",
     "TaskNotFailedError",
+    # Orchestrator
+    "ExecutionOrchestrator",
+    "OrchestrationError",
 ]
 
 

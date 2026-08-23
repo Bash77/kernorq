@@ -66,7 +66,7 @@ VALID_EXECUTION_TRANSITIONS: dict[ExecutionStatus, set[ExecutionStatus]] = {
     ExecutionStatus.PENDING: {ExecutionStatus.PLANNING, ExecutionStatus.CANCELLED},
     ExecutionStatus.PLANNING: {ExecutionStatus.EXECUTING, ExecutionStatus.CANCELLED},
     ExecutionStatus.EXECUTING: {ExecutionStatus.VERIFYING, ExecutionStatus.RECOVERING, ExecutionStatus.FAILED, ExecutionStatus.CANCELLED},
-    ExecutionStatus.VERIFYING: {ExecutionStatus.COMPLETED, ExecutionStatus.RECOVERING, ExecutionStatus.FAILED},
+    ExecutionStatus.VERIFYING: {ExecutionStatus.COMPLETED, ExecutionStatus.RECOVERING, ExecutionStatus.EXECUTING, ExecutionStatus.FAILED},
     ExecutionStatus.RECOVERING: {ExecutionStatus.EXECUTING, ExecutionStatus.FAILED, ExecutionStatus.COMPLETED, ExecutionStatus.CANCELLED},
     ExecutionStatus.COMPLETED: set(),
     ExecutionStatus.FAILED: set(),
