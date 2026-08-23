@@ -74,4 +74,18 @@ def inspect_project_workspace(
         }
 
 
-__all__ = ["inspect_project_workspace"]
+from app.tools.registry import (
+    DuplicateToolError,
+    ToolNotFoundError,
+    ToolRegistry,
+    create_default_tool_registry,
+)
+
+__all__ = [
+    "inspect_project_workspace",
+    "ToolRegistry",
+    "DuplicateToolError",
+    "ToolNotFoundError",
+    "create_default_tool_registry",
+]
+

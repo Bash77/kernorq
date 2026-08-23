@@ -1,5 +1,10 @@
-from __future__ import annotations
-
+from app.orchestration.executor import (
+    ExecutionError,
+    InvalidTaskStateError,
+    MissingToolError,
+    TaskNotFoundError,
+    execute_task,
+)
 from app.orchestration.state import (
     VALID_EXECUTION_TRANSITIONS,
     VALID_TASK_TRANSITIONS,
@@ -32,4 +37,10 @@ __all__ = [
     "VALID_EXECUTION_TRANSITIONS",
     "VALID_TASK_TRANSITIONS",
     "utc_now",
+    "execute_task",
+    "ExecutionError",
+    "TaskNotFoundError",
+    "InvalidTaskStateError",
+    "MissingToolError",
 ]
+
