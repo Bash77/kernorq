@@ -21,8 +21,17 @@ from app.orchestration.state import (
     VerificationStatus,
     utc_now,
 )
+from app.orchestration.verifier import (
+    TaskNotInVerifyingStateError,
+    VerificationError,
+    VerificationStrategy,
+    VerificationStrategyRegistry,
+    create_default_strategy_registry,
+    verify_task,
+)
 
 __all__ = [
+    # State
     "Execution",
     "Task",
     "Checkpoint",
@@ -37,10 +46,19 @@ __all__ = [
     "VALID_EXECUTION_TRANSITIONS",
     "VALID_TASK_TRANSITIONS",
     "utc_now",
+    # Executor
     "execute_task",
     "ExecutionError",
     "TaskNotFoundError",
     "InvalidTaskStateError",
     "MissingToolError",
+    # Verifier
+    "verify_task",
+    "VerificationStrategy",
+    "VerificationStrategyRegistry",
+    "VerificationError",
+    "TaskNotInVerifyingStateError",
+    "create_default_strategy_registry",
 ]
+
 
