@@ -57,14 +57,17 @@ class EventType(str, Enum):
     EXECUTION_COMPLETED = "EXECUTION_COMPLETED"
     EXECUTION_FAILED = "EXECUTION_FAILED"
     EXECUTION_CANCELLED = "EXECUTION_CANCELLED"
+    RECOVERY_STARTED = "RECOVERY_STARTED"
+    RECOVERY_SELECTED = "RECOVERY_SELECTED"
+    RETRY_STARTED = "RETRY_STARTED"
 
 
 VALID_EXECUTION_TRANSITIONS: dict[ExecutionStatus, set[ExecutionStatus]] = {
     ExecutionStatus.PENDING: {ExecutionStatus.PLANNING, ExecutionStatus.CANCELLED},
     ExecutionStatus.PLANNING: {ExecutionStatus.EXECUTING, ExecutionStatus.CANCELLED},
-    ExecutionStatus.EXECUTING: {ExecutionStatus.VERIFYING, ExecutionStatus.FAILED, ExecutionStatus.CANCELLED},
+    ExecutionStatus.EXECUTING: {ExecutionStatus.VERIFYING, ExecutionStatus.RECOVERING, ExecutionStatus.FAILED, ExecutionStatus.CANCELLED},
     ExecutionStatus.VERIFYING: {ExecutionStatus.COMPLETED, ExecutionStatus.RECOVERING, ExecutionStatus.FAILED},
-    ExecutionStatus.RECOVERING: {ExecutionStatus.EXECUTING, ExecutionStatus.FAILED, ExecutionStatus.CANCELLED},
+    ExecutionStatus.RECOVERING: {ExecutionStatus.EXECUTING, ExecutionStatus.FAILED, ExecutionStatus.COMPLETED, ExecutionStatus.CANCELLED},
     ExecutionStatus.COMPLETED: set(),
     ExecutionStatus.FAILED: set(),
     ExecutionStatus.CANCELLED: set(),
@@ -77,7 +80,7 @@ VALID_TASK_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
     TaskStatus.RUNNING: {TaskStatus.VERIFYING, TaskStatus.FAILED, TaskStatus.CANCELLED},
     TaskStatus.VERIFYING: {TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED},
     TaskStatus.SUCCEEDED: set(),
-    TaskStatus.FAILED: {TaskStatus.READY},  # Retries must reset to READY before RUNNING
+    TaskStatus.FAILED: {TaskStatus.READY, TaskStatus.SUCCEEDED},  # SUCCEEDED allowed for idempotent recovery (external state FOUND)
     TaskStatus.CANCELLED: set(),
 }
 

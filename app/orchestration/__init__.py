@@ -29,6 +29,14 @@ from app.orchestration.verifier import (
     create_default_strategy_registry,
     verify_task,
 )
+from app.orchestration.recovery import (
+    FailureCategory,
+    RecoveryAction,
+    RecoveryError,
+    TaskNotFailedError,
+    classify_failure,
+    recover_task,
+)
 
 __all__ = [
     # State
@@ -59,6 +67,13 @@ __all__ = [
     "VerificationError",
     "TaskNotInVerifyingStateError",
     "create_default_strategy_registry",
+    # Recovery
+    "recover_task",
+    "classify_failure",
+    "FailureCategory",
+    "RecoveryAction",
+    "RecoveryError",
+    "TaskNotFailedError",
 ]
 
 
