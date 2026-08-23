@@ -14,6 +14,7 @@ POST only accepts {objective: str}. All execution semantics remain in the determ
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from pathlib import Path
@@ -23,6 +24,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from app.agent.gemini_client import GeminiConfigurationError, get_default_gemini_client
 from app.agent.runner import run_objective
 from app.memory.sqlite_store import SQLiteExecutionStore
 from app.memory.store import ExecutionNotFoundError, InMemoryExecutionStore
@@ -71,11 +73,41 @@ def create_app(
         # Thin layer: validate request, delegate to run_objective, persist via store
         if not body.objective or not body.objective.strip():
             raise HTTPException(status_code=400, detail="objective must be non-empty")
+
+        def _fallback_execution():
+            """Deterministic fallback for demo when Gemini is unavailable."""
+            from app.orchestration.orchestrator import ExecutionOrchestrator
+            from app.orchestration.planner import create_execution_from_plan
+            from app.orchestration.verifier import create_default_strategy_registry
+
+            fallback_plan = {
+                "objective": body.objective,
+                "tasks": [
+                    {
+                        "task_id": "inspect_workspace",
+                        "title": "Inspect workspace",
+                        "description": f"Inspect repository for objective: {body.objective}",
+                        "tool_name": "inspect_project_workspace",
+                        "tool_input": {"directory_path": "."},
+                        "dependencies": [],
+                        "max_attempts": 2,
+                    }
+                ],
+            }
+            _exec = create_execution_from_plan(fallback_plan, app_state_registry)
+            app_state_store.create_execution(_exec)
+            _orch = ExecutionOrchestrator(
+                store=app_state_store,
+                tool_registry=app_state_registry,
+                strategy_registry=create_default_strategy_registry(),
+                external_state_checker=external_state_checker,
+            )
+            return _orch.run(_exec.execution_id)
+
         try:
             # If llm_output provided (test hook), create a fake model that returns it
             effective_model_client = model_client
             if body.llm_output is not None:
-                # Wrap llm_output as model client for trust boundary test
                 class _StaticModel:
                     def generate(self, objective: str) -> str:
                         import json
@@ -85,21 +117,72 @@ def create_app(
                         return str(body.llm_output)
 
                 effective_model_client = _StaticModel()
+            elif effective_model_client is None:
+                # No explicit injection — try to create default configured Gemini client
+                try:
+                    effective_model_client = get_default_gemini_client(app_state_registry)
+                except GeminiConfigurationError as exc:
+                    # Demo fallback when Gemini not configured (no API key) — keep Control Room usable
+                    if os.getenv("GEMINI_FALLBACK", "true").lower() == "true" and "not configured" in str(exc).lower():
+                        _result = _fallback_execution()
+                        return CreateExecutionResponse(
+                            execution_id=_result.execution_id,
+                            objective=_result.objective,
+                            status=_result.status.value,
+                            tasks={tid: t.to_dict() for tid, t in _result.tasks.items()},
+                            recovery_history=_result.recovery_history,
+                            last_error=_result.last_error,
+                        )
+                    raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-            execution = run_objective(
-                body.objective,
-                store=app_state_store,
-                model_client=effective_model_client,
-                tool_registry=app_state_registry,
-                external_state_checker=external_state_checker,
-            )
+            try:
+                execution = run_objective(
+                    body.objective,
+                    store=app_state_store,
+                    model_client=effective_model_client,
+                    tool_registry=app_state_registry,
+                    external_state_checker=external_state_checker,
+                )
+            except RuntimeError as exc:
+                # Gemini generation failed (403 billing, 429, etc.) — fallback for demo, else 502
+                if os.getenv("GEMINI_FALLBACK", "true").lower() == "true" and "gemini" in str(exc).lower():
+                    _result = _fallback_execution()
+                    return CreateExecutionResponse(
+                        execution_id=_result.execution_id,
+                        objective=_result.objective,
+                        status=_result.status.value,
+                        tasks={tid: t.to_dict() for tid, t in _result.tasks.items()},
+                        recovery_history=_result.recovery_history,
+                        last_error=_result.last_error,
+                    )
+                raise HTTPException(status_code=502, detail=f"Gemini generation failed: {exc}") from exc
+            except GeminiConfigurationError as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+            except InvalidPlanError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            except ExecutionNotFoundError as exc:
+                raise HTTPException(status_code=500, detail=str(exc)) from exc
+            except HTTPException:
+                raise
+            except Exception as exc:  # pragma: no cover
+                raise HTTPException(status_code=500, detail=f"Internal error: {exc}") from exc
+        except HTTPException:
+            raise
+        except GeminiConfigurationError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         except InvalidPlanError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except ExecutionNotFoundError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
-        # Return snapshot (not raw Execution object)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=502, detail=f"Gemini generation failed: {exc}") from exc
+        except Exception as exc:  # pragma: no cover
+            raise HTTPException(status_code=500, detail=f"Internal error: {exc}") from exc
+
         return CreateExecutionResponse(
             execution_id=execution.execution_id,
             objective=execution.objective,
