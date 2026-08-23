@@ -16,7 +16,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.agent.runner import run_objective
@@ -105,6 +109,16 @@ def create_app(
             last_error=execution.last_error,
         )
 
+    @app.get("/executions")
+    def list_executions():
+        # Minimal API integration for execution history — UI treats store as source of truth
+        try:
+            executions = app_state_store.list_executions()  # type: ignore[attr-defined]
+        except AttributeError:
+            # Fallback for stores without list method (should not happen after 2.8)
+            executions = []
+        return [e.snapshot() for e in executions]
+
     @app.get("/executions/{execution_id}")
     def get_execution(execution_id: str):
         try:
@@ -130,6 +144,18 @@ def create_app(
             raise HTTPException(status_code=404, detail=f"Execution {execution_id} not found")
         events = app_state_store.get_events(execution_id)
         return [e.to_dict() for e in events]
+
+    # Mount static UI (control room) — serves at /static and / (index)
+    static_dir = Path(__file__).parent.parent / "static"
+    if static_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+        @app.get("/")
+        def serve_ui():
+            index = static_dir / "index.html"
+            if index.exists():
+                return FileResponse(str(index))
+            raise HTTPException(status_code=404, detail="UI not found")
 
     # Expose store for testing (e.g., restart simulation)
     app.state.store = app_state_store  # type: ignore

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic Execution — Control Room</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="dot"></div>
+    <span>Agentic Execution</span>
+    <span class="badge" id="global-status">● Idle</span>
+  </div>
+  <div class="subtitle">Deterministic runtime — LLM proposes, engine verifies</div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="panel-title">EXECUTIONS</div>
+    <div id="execution-list" class="exec-list">Loading…</div>
+    <div class="panel-title" style="margin-top:18px">OBJECTIVE</div>
+    <form id="objective-form" class="objective-form">
+      <textarea id="objective-input" rows="3" placeholder="Inspect my project and report its structure">Inspect my project and report its structure</textarea>
+      <button type="submit" id="run-btn">Run objective</button>
+      <div id="form-error" class="error hidden"></div>
+    </form>
+    <div class="hint">POST /executions → Orchestrator → SQLite</div>
+  </aside>
+
+  <main class="main">
+    <div id="empty-state" class="empty">Select an execution or run a new objective.</div>
+
+    <div id="execution-detail" class="hidden">
+      <div class="exec-header">
+        <div>
+          <div class="label">Execution</div>
+          <div class="exec-id" id="exec-id">exec_…</div>
+          <div class="objective" id="exec-objective">…</div>
+        </div>
+        <div class="status-badge" id="exec-status">PENDING</div>
+      </div>
+
+      <section class="card">
+        <div class="card-title">EXECUTION PIPELINE</div>
+        <div class="pipeline" id="pipeline">
+          <div class="step" data-step="PLANNING"><span class="icon">○</span> Planning</div>
+          <div class="step" data-step="EXECUTING"><span class="icon">○</span> Executing</div>
+          <div class="step" data-step="VERIFYING"><span class="icon">○</span> Verifying</div>
+          <div class="step" data-step="RECOVERING"><span class="icon">○</span> Recovering</div>
+          <div class="step" data-step="COMPLETED"><span class="icon">○</span> Completed</div>
+          <div class="step" data-step="FAILED"><span class="icon">○</span> Failed</div>
+        </div>
+      </section>
+
+      <div class="grid">
+        <section class="card">
+          <div class="card-title">TASKS</div>
+          <div id="task-list" class="task-list"></div>
+        </section>
+        <section class="card">
+          <div class="card-title">VERIFICATION / RECOVERY</div>
+          <div id="verification" class="mono small"></div>
+          <div id="recovery" class="mono small"></div>
+        </section>
+      </div>
+
+      <section class="card">
+        <div class="card-title">EVENT TIMELINE</div>
+        <div id="event-timeline" class="timeline"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">CHECKPOINTS</div>
+        <div id="checkpoints" class="mono small"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -431,6 +431,10 @@ class SQLiteExecutionStore:
             )
         return [copy.deepcopy(c) for c in checkpoints]
 
+    def list_executions(self) -> list[Execution]:
+        cur = self._conn.execute("SELECT execution_id FROM executions ORDER BY created_at DESC")
+        return [self.get_execution(row["execution_id"]) for row in cur.fetchall()]
+
     def close(self) -> None:
         try:
             self._conn.close()

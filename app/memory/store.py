@@ -28,6 +28,7 @@ class ExecutionStore(Protocol):
         self, execution_id: str, reason: str, task_id: str | None = None
     ) -> Checkpoint: ...
     def get_checkpoints(self, execution_id: str) -> list[Checkpoint]: ...
+    def list_executions(self) -> list[Execution]: ...
 
 
 class InMemoryExecutionStore:
@@ -116,6 +117,10 @@ class InMemoryExecutionStore:
     def get_checkpoints(self, execution_id: str) -> list[Checkpoint]:
         """Returns isolated copies of all checkpoints for the given execution ID."""
         return [copy.deepcopy(chk) for chk in self._checkpoints.get(execution_id, [])]
+
+    def list_executions(self) -> list[Execution]:
+        """Returns isolated copies of all executions."""
+        return [copy.deepcopy(e) for e in self._executions.values()]
 
 
 __all__ = [
