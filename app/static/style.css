@@ -34,6 +34,15 @@
 .step{font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:#0b0e14;color:var(--muted);display:flex;gap:6px;align-items:center}
 .step.active{border-color:var(--accent);color:var(--text);background:#111a2e}
 .step.done{border-color:#1f3a2a;color:#86efac;background:#0f1f16}
+.step.pending{opacity:0.55}
+.step.failed{border-color:#3a1f1f;color:#fca5a5;background:#1e0f0f}
+.pipeline-note{font-size:11px;color:var(--muted);margin-top:6px;width:100%}
+.ver-summary{padding:8px 10px;border-radius:8px;margin-bottom:8px;border:1px solid var(--border)}
+.ver-summary.ok{background:#0f1f16;border-color:#1f3a2a;color:#86efac}
+.ver-summary.warn{background:#1e1a0f;border-color:#3a2a0f;color:#fde68a}
+.ver-summary.err{background:#1e0f0f;border-color:#3a1f1f;color:#fca5a5}
+.rec-entry{padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:#0b0e14;margin-bottom:6px}
+details{margin-top:8px}details summary{cursor:pointer;color:var(--muted);font-size:11px}details pre{background:#0b0e14;border:1px solid var(--border);border-radius:8px;padding:8px;max-height:200px;overflow:auto}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .task-list{display:flex;flex-direction:column;gap:8px}
 .task{border:1px solid var(--border);border-radius:10px;padding:10px;background:#0b0e14}
