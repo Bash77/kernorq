@@ -44,6 +44,15 @@ class ExecutionOrchestrator:
       - tool_registry: available tools
       - strategy_registry: verification strategies
       - external_state_checker: optional UNKNOWN handler
+      - scheduling_policy: optional READY-task ordering hook
+
+    scheduling_policy (Phase 2 extension point):
+      Callable[[list[Task]], list[str]] invoked with the currently READY
+      tasks each time a task must be selected; returns task_ids in preferred
+      execution order. The orchestrator still enforces dependency readiness,
+      state transitions, executor/verifier/recovery flow — the policy only
+      chooses WHICH ready task runs next. When None (default), selection is
+      exactly the legacy behavior: smallest task_id first.
     """
 
     def __init__(
@@ -53,12 +62,14 @@ class ExecutionOrchestrator:
         strategy_registry: VerificationStrategyRegistry,
         external_state_checker: Callable | None = None,
         max_steps: int = 100,
+        scheduling_policy: Callable[[list], list[str]] | None = None,
     ) -> None:
         self.store = store
         self.tool_registry = tool_registry
         self.strategy_registry = strategy_registry
         self.external_state_checker = external_state_checker
         self.max_steps = max_steps
+        self.scheduling_policy = scheduling_policy
 
     def run(self, execution_id: str) -> Execution:
         """
@@ -144,9 +155,23 @@ class ExecutionOrchestrator:
                 # Return as is
                 return execution
 
-            # Execute next READY task (deterministic)
-            ready_tasks.sort(key=lambda t: t.task_id)
-            task_id = ready_tasks[0].task_id
+            # Execute next READY task (deterministic).
+            # A non-None scheduling_policy chooses WHICH ready task runs next
+            # (workload priority/deadline); readiness itself remains enforced
+            # above — a blocked task can never be selected regardless of rank.
+            if self.scheduling_policy is not None:
+                ordered_ids = [
+                    tid
+                    for tid in self.scheduling_policy(ready_tasks)
+                    if any(t.task_id == tid for t in ready_tasks)
+                ]
+                if not ordered_ids:
+                    ordered_ids = [t.task_id for t in ready_tasks]
+                    ordered_ids.sort()
+                task_id = ordered_ids[0]
+            else:
+                ready_tasks.sort(key=lambda t: t.task_id)
+                task_id = ready_tasks[0].task_id
 
             # Executor
             execution = execute_task(execution, task_id, self.store, self.tool_registry)

@@ -93,15 +93,22 @@ class InMemoryExecutionStore:
     ) -> Checkpoint:
         """Creates and stores an immutable state snapshot checkpoint.
 
+        The snapshot captures tasks/execution state but deliberately EXCLUDES
+        the checkpoints list itself: nesting historical checkpoints (each with
+        their own snapshots) inside every new snapshot makes storage grow
+        exponentially with execution length. Consumers read checkpoints via
+        get_checkpoints(); no reader consumes nested copies.
+
         Raises:
             ExecutionNotFoundError: If execution does not exist.
         """
         if execution_id not in self._executions:
             raise ExecutionNotFoundError(f"Execution {execution_id} not found")
-        
-        # Snapshot the stored execution state
+
+        # Snapshot the stored execution state (pruned — see docstring)
         execution_in_store = self._executions[execution_id]
-        snapshot = copy.deepcopy(execution_in_store.snapshot())
+        snapshot = execution_in_store.snapshot()
+        snapshot.pop("checkpoints", None)
         checkpoint = Checkpoint(
             checkpoint_id=f"chk_{uuid.uuid4().hex[:12]}",
             execution_id=execution_id,
@@ -110,8 +117,11 @@ class InMemoryExecutionStore:
             reason=reason,
             timestamp=utc_now(),
         )
-        execution_in_store.checkpoints.append(copy.deepcopy(checkpoint))
-        self._checkpoints[execution_id].append(copy.deepcopy(checkpoint))
+        # Internal lists are only exposed via get_* which return isolated copies.
+        stored_for_execution = copy.deepcopy(checkpoint)
+        stored_for_execution.state_snapshot = dict(snapshot)
+        execution_in_store.checkpoints.append(stored_for_execution)
+        self._checkpoints[execution_id].append(checkpoint)
         return copy.deepcopy(checkpoint)
 
     def get_checkpoints(self, execution_id: str) -> list[Checkpoint]:

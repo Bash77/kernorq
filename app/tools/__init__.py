@@ -74,6 +74,10 @@ def inspect_project_workspace(
         }
 
 
+from app.tools.content import analyze_competitors, generate_carousel, research_topic
+from app.tools.project_diagnostics import project_diagnostics
+from app.tools.run_test_suite import run_test_suite
+
 from app.tools.registry import (
     DuplicateToolError,
     ToolNotFoundError,
@@ -83,6 +87,11 @@ from app.tools.registry import (
 
 __all__ = [
     "inspect_project_workspace",
+    "run_test_suite",
+    "project_diagnostics",
+    "research_topic",
+    "analyze_competitors",
+    "generate_carousel",
     "ToolRegistry",
     "DuplicateToolError",
     "ToolNotFoundError",

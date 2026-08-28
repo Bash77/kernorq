@@ -30,3 +30,5 @@ Thumbs.db
 dist/
 build/
 *.egg-info/
+*.db-shm
+*.db-wal

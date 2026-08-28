@@ -378,3 +378,134 @@ def test_recovery_does_not_execute_tool():
     after_exec = execute_task(after, "task_rec13", store, registry)
     assert len(calls) == tool_calls_before + 1
     assert after_exec.tasks["task_rec13"].status == TaskStatus.VERIFYING
+
+
+# ---------------------------------------------------------------------------
+# Deterministic precondition failures (NoTestSuiteFound) — never retried
+# ---------------------------------------------------------------------------
+
+def test_classify_no_test_suite_found_is_permanent_via_task_error():
+    """Executor-direct path: task.error carries NoTestSuiteFound, verification None."""
+    store = InMemoryExecutionStore()
+    execution = Execution(execution_id="exec_nts1", objective="Run tests")
+    task = Task(
+        task_id="t_nts1", execution_id="exec_nts1", title="T", description="D",
+        tool_name="run_test_suite", status=TaskStatus.FAILED, attempt_count=1, max_attempts=3,
+    )
+    task.error = {"type": "NoTestSuiteFound", "message": "No test suite found at 'tests'"}
+    task.result = {"success": False, "error": task.error}
+    execution.add_task(task)
+    execution.status = ExecutionStatus.EXECUTING
+    store.create_execution(execution)
+    stored = store.get_execution("exec_nts1")
+    stored.tasks["t_nts1"].status = TaskStatus.FAILED
+
+    assert classify_failure(stored.tasks["t_nts1"]) == FailureCategory.PERMANENT
+
+
+def test_classify_no_test_suite_found_is_permanent_via_result_error():
+    """Result-carried error type must also classify as PERMANENT."""
+    store = InMemoryExecutionStore()
+    execution = Execution(execution_id="exec_nts2", objective="Run tests")
+    task = Task(
+        task_id="t_nts2", execution_id="exec_nts2", title="T", description="D",
+        tool_name="run_test_suite", status=TaskStatus.FAILED, attempt_count=1, max_attempts=3,
+    )
+    execution.add_task(task)
+    execution.status = ExecutionStatus.EXECUTING
+    store.create_execution(execution)
+    stored = store.get_execution("exec_nts2")
+    stored.tasks["t_nts2"].status = TaskStatus.FAILED
+    stored.tasks["t_nts2"].result = {
+        "success": False,
+        "error": {"type": "NoTestSuiteFound", "message": "no suite"},
+    }
+    store.update_execution(stored)
+
+    assert classify_failure(stored.tasks["t_nts2"]) == FailureCategory.PERMANENT
+
+
+def test_classify_verifier_no_suite_evidence_is_permanent():
+    """Verifier evidence with explicit_outcome NO_TEST_SUITE_FOUND classifies PERMANENT."""
+    store = InMemoryExecutionStore()
+    execution = Execution(execution_id="exec_nts3", objective="Run tests")
+    task = Task(
+        task_id="t_nts3", execution_id="exec_nts3", title="T", description="D",
+        tool_name="run_test_suite", status=TaskStatus.FAILED, attempt_count=1, max_attempts=3,
+    )
+    execution.add_task(task)
+    execution.status = ExecutionStatus.VERIFYING
+    store.create_execution(execution)
+    stored = store.get_execution("exec_nts3")
+    stored.tasks["t_nts3"].status = TaskStatus.FAILED
+    from app.orchestration.state import VerificationResult as VR
+
+    stored.tasks["t_nts3"].verification = VR(
+        status=VerificationStatus.VERIFIED_FAILURE,
+        message="Test suite not available",
+        evidence={"explicit_outcome": "NO_TEST_SUITE_FOUND", "error_type": "NoTestSuiteFound"},
+    )
+    store.update_execution(stored)
+
+    assert classify_failure(stored.tasks["t_nts3"]) == FailureCategory.PERMANENT
+
+
+def test_recover_no_test_suite_does_not_retry():
+    """Full recovery: NoTestSuiteFound fails immediately — no RETRY_STARTED, single attempt."""
+    store = InMemoryExecutionStore()
+    execution = Execution(execution_id="exec_nts4", objective="Run my test suite and report failures")
+    task = Task(
+        task_id="t_nts4", execution_id="exec_nts4", title="Run tests", description="D",
+        tool_name="run_test_suite", status=TaskStatus.FAILED, attempt_count=1, max_attempts=3,
+    )
+    task.error = {"type": "NoTestSuiteFound", "message": "path does not exist"}
+    task.result = {"success": False, "status": "no_test_suite", "error": task.error}
+    execution.add_task(task)
+    execution.status = ExecutionStatus.EXECUTING
+    store.create_execution(execution)
+    stored = store.get_execution("exec_nts4")
+    stored.tasks["t_nts4"].status = TaskStatus.FAILED
+    stored.tasks["t_nts4"].error = task.error
+    stored.tasks["t_nts4"].result = task.result
+    store.update_execution(stored)
+
+    after = recover_task(stored, "t_nts4", store)
+
+    # PERMANENT -> FAIL immediately: stays FAILED, never READY for retry
+    assert after.tasks["t_nts4"].status == TaskStatus.FAILED
+    assert after.status == ExecutionStatus.FAILED
+    assert after.tasks["t_nts4"].attempt_count == 1  # executed once only
+    assert after.last_error["category"] == "PERMANENT"
+    assert after.last_error["recovery_action"] == "FAIL"
+
+    event_types = [e.event_type.value for e in store.get_events("exec_nts4")]
+    assert "RECOVERY_STARTED" in event_types
+    assert "RECOVERY_SELECTED" in event_types
+    assert "RETRY_STARTED" not in event_types  # THE assertion: no retry scheduled
+
+
+def test_transient_failures_still_retry_after_classification_change():
+    """Guard: genuine transient errors keep TRANSIENT classification and retry."""
+    store = InMemoryExecutionStore()
+    execution = Execution(execution_id="exec_trans_guard", objective="Run tests")
+    task = Task(
+        task_id="t_trans", execution_id="exec_trans_guard", title="T", description="D",
+        tool_name="run_test_suite", status=TaskStatus.FAILED, attempt_count=1, max_attempts=3,
+    )
+    task.error = {"type": "RuntimeError", "message": "temporary network blip"}
+    task.result = {"success": False, "error": task.error}
+    execution.add_task(task)
+    execution.status = ExecutionStatus.EXECUTING
+    store.create_execution(execution)
+    stored = store.get_execution("exec_trans_guard")
+    stored.tasks["t_trans"].status = TaskStatus.FAILED
+    stored.tasks["t_trans"].error = task.error
+    stored.tasks["t_trans"].result = task.result
+    store.update_execution(stored)
+
+    assert classify_failure(stored.tasks["t_trans"]) == FailureCategory.TRANSIENT
+
+    after = recover_task(stored, "t_trans", store)
+    assert after.tasks["t_trans"].status == TaskStatus.READY  # retry scheduled
+    event_types = [e.event_type.value for e in store.get_events("exec_trans_guard")]
+    assert "RETRY_STARTED" in event_types

@@ -3,82 +3,370 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Agentic Execution — Control Room</title>
+<title>Kernorq — Autonomous Execution</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header class="topbar">
-  <div class="brand">
-    <div class="dot"></div>
-    <span>Agentic Execution</span>
-    <span class="badge" id="global-status">● Idle</span>
-  </div>
-  <div class="subtitle">Deterministic runtime — LLM proposes, engine verifies</div>
-</header>
-
-<div class="layout">
+<div class="app">
   <aside class="sidebar">
-    <div class="panel-title">EXECUTIONS</div>
-    <div id="execution-list" class="exec-list">Loading…</div>
-    <div class="panel-title" style="margin-top:18px">OBJECTIVE</div>
-    <form id="objective-form" class="objective-form">
-      <textarea id="objective-input" rows="3" placeholder="Inspect my project and report its structure">Inspect my project and report its structure</textarea>
-      <button type="submit" id="run-btn">Run objective</button>
-      <div id="form-error" class="error hidden"></div>
-    </form>
-    <div class="hint">POST /executions → Orchestrator → SQLite</div>
+    <div class="sidebar-top">
+      <a class="logo" href="#home" data-nav="home">
+        <div class="logo-icon">⬢</div>
+        <div><div class="logo-title">Kernorq</div><div class="logo-sub">Autonomous Execution</div></div>
+      </a>
+      <nav class="nav">
+        <a href="#home" class="nav-item active" data-nav="home"><span class="nav-icon">◈</span> Home</a>
+        <a href="#activity" class="nav-item" data-nav="activity"><span class="nav-icon">≡</span> Activity</a>
+        <a href="#projects" class="nav-item" data-nav="projects"><span class="nav-icon">▣</span> Projects</a>
+        <a href="#settings" class="nav-item" data-nav="settings"><span class="nav-icon">⚙</span> Settings</a>
+      </nav>
+    </div>
+    <div class="sidebar-bottom">
+      <div class="panel-label">SYSTEM STATUS</div>
+      <div class="status-row"><span class="dot"></span> <span id="sys-status">Online</span></div>
+      <div class="status-detail">Deterministic runtime · SQLite</div>
+      <div class="status-detail voice-status" id="voice-status-line">Voice: checking…</div>
+    </div>
   </aside>
 
   <main class="main">
-    <div id="empty-state" class="empty">Select an execution or run a new objective.</div>
+    <!-- ============ HOME ============ -->
+    <section id="view-home" class="view active">
+      <header class="top-header">
+        <div class="status-pill"><span class="dot"></span> Online</div>
+        <button id="refresh-btn" class="btn ghost small" aria-label="Refresh">↻</button>
+      </header>
 
-    <div id="execution-detail" class="hidden">
-      <div class="exec-header">
-        <div>
-          <div class="label">Execution</div>
-          <div class="exec-id" id="exec-id">exec_…</div>
-          <div class="objective" id="exec-objective">…</div>
+      <!-- Judge demo hero — authoritative, 10-second comprehension -->
+      <div class="demo-hero">
+        <div class="demo-hero-title">KERNORQ</div>
+        <div class="demo-hero-tagline">Turn workloads into verified outcomes.</div>
+        <div class="demo-hero-meta">
+          <div class="demo-meta-card">
+            <div class="demo-meta-label">Project</div>
+            <div class="demo-meta-value">Kernorq Demo Project</div>
+          </div>
+          <div class="demo-meta-card">
+            <div class="demo-meta-label">Workload</div>
+            <div class="demo-meta-value">Golden Demo Workload <span class="demo-task-count" id="demo-task-count">— tasks</span></div>
+            <div class="demo-meta-sub" id="demo-workload-sub">Loading workload…</div>
+          </div>
         </div>
-        <div class="status-badge" id="exec-status">PENDING</div>
+        <button id="run-workload-btn" class="btn primary demo-cta"><span class="cta-icon">▶</span> Run Workload</button>
+        <div id="demo-hero-status" class="demo-hero-status hint"></div>
       </div>
 
-      <section class="card">
-        <div class="card-title">EXECUTION PIPELINE</div>
-        <div class="pipeline" id="pipeline">
-          <div class="step" data-step="PLANNING"><span class="icon">○</span> Planning</div>
-          <div class="step" data-step="EXECUTING"><span class="icon">○</span> Executing</div>
-          <div class="step" data-step="VERIFYING"><span class="icon">○</span> Verifying</div>
-          <div class="step" data-step="RECOVERING"><span class="icon">○</span> Recovering</div>
-          <div class="step" data-step="COMPLETED"><span class="icon">○</span> Completed</div>
-          <div class="step" data-step="FAILED"><span class="icon">○</span> Failed</div>
+      <!-- Workload overview — compact table from backend, no invented data -->
+      <div id="workload-overview" class="card demo-overview hidden">
+        <div class="demo-section-head">
+          <div class="panel-label">WORKLOAD OVERVIEW — <span id="overview-count">22 tasks</span></div>
+          <div class="demo-legend">
+            <span class="legend-dot ready"></span> READY
+            <span class="legend-dot blocked"></span> BLOCKED
+            <span class="legend-dot exec"></span> EXECUTING
+            <span class="legend-dot done"></span> COMPLETED
+            <span class="legend-dot fail"></span> FAILED
+          </div>
         </div>
-      </section>
-
-      <div class="grid">
-        <section class="card">
-          <div class="card-title">TASKS</div>
-          <div id="task-list" class="task-list"></div>
-        </section>
-        <section class="card">
-          <div class="card-title">VERIFICATION / RECOVERY</div>
-          <div id="verification" class="mono small"></div>
-          <div id="recovery" class="mono small"></div>
-        </section>
+        <div id="workload-table" class="workload-table"></div>
+        <div class="demo-policy-note hint">Kernorq ranks READY tasks by priority → deadline → task ID. CSV order is never executed directly.</div>
       </div>
 
-      <section class="card">
-        <div class="card-title">EVENT TIMELINE</div>
-        <div id="event-timeline" class="timeline"></div>
-      </section>
+      <!-- Live workload intelligence — what matters now -->
+      <div id="workload-intel" class="hidden">
+        <div class="grid-2" style="margin-bottom:14px">
+          <div class="card">
+            <div class="panel-label">YOUR WORKLOAD</div>
+            <div id="workload-summary" class="workload-summary"></div>
+          </div>
+          <div class="card">
+            <div class="panel-label">WHAT YOU NEED NOW</div>
+            <div id="what-you-need" class="what-you-need"></div>
+          </div>
+        </div>
+        <div class="grid-2" style="margin-bottom:14px">
+          <div class="card">
+            <div class="panel-label">KERNORQ IS WORKING</div>
+            <div id="kernorq-working" class="kernorq-working"></div>
+          </div>
+          <div class="card">
+            <div class="panel-label">NEXT 60 MINUTES</div>
+            <div id="next-hour" class="next-hour"></div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:14px">
+          <div class="panel-label">LATER TODAY — SCHEDULED WORK</div>
+          <div id="later-today" class="later-today"></div>
+        </div>
+        <div id="task-detail" class="card hidden">
+          <div class="panel-label">TASK DETAIL</div>
+          <div id="task-detail-content"></div>
+        </div>
+      </div>
 
-      <section class="card">
-        <div class="card-title">CHECKPOINTS</div>
-        <div id="checkpoints" class="mono small"></div>
-      </section>
-    </div>
+      <div class="composer-wrap">
+        <div class="composer-label hint">Or describe any objective — Kernorq will plan and execute it deterministically:</div>
+        <div class="composer" id="composer">
+          <textarea id="objective-input" rows="2"
+            placeholder="Tell Kernorq what you want done..."
+            aria-label="Objective"></textarea>
+          <div class="composer-bar">
+            <button id="mic-btn" class="mic-btn" aria-label="Speak to Kernorq" title="Speak to Kernorq">
+              <span class="mic-icon">🎙</span>
+            </button>
+            <button id="voice-mode-btn" class="btn ghost small" aria-label="Toggle continuous voice mode" title="Continuous voice mode: speak naturally, interrupt anytime">🎙 Voice mode</button>
+            <span id="voice-state" class="voice-state hidden"></span>
+            <div class="wave hidden" id="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+            <button id="execute-btn" class="btn primary" disabled>Execute Objective →</button>
+          </div>
+        </div>
+
+        <div class="suggestions">
+          <span class="suggestions-label">Try:</span>
+          <button class="chip suggestion" data-objective="Inspect my project and report its structure">Inspect my project and report its structure</button>
+          <button class="chip suggestion" data-objective="Run my test suite and report failures">Run my test suite and report failures</button>
+          <button class="chip suggestion" data-objective="Check my project for problems">Check my project for problems</button>
+        </div>
+      </div>
+      <div id="form-error" class="error hidden" role="alert"></div>
+    </section>
+
+    <!-- ============ EXECUTION EXPERIENCE ============ -->
+    <section id="view-execution" class="view">
+      <header class="top-header">
+        <a href="#home" class="btn ghost small" data-nav="home">← New objective</a>
+        <div id="exec-status-pill" class="status-pill running"><span class="dot"></span> <span id="exec-status-text">STARTING</span></div>
+      </header>
+
+      <div class="objective-banner">
+        <div class="panel-label">OBJECTIVE</div>
+        <div id="x-objective" class="obj-text">—</div>
+        <div class="mono dim" id="x-exec-id"></div>
+      </div>
+
+      <!-- Demo workload live experience — only visible for workload executions -->
+      <div id="demo-live" class="hidden">
+        <div class="card demo-live-card">
+          <div class="demo-live-head">
+            <span class="demo-live-pulse"></span>
+            <span class="panel-label" style="margin:0">KERNORQ IS ORCHESTRATING</span>
+          </div>
+          <div class="grid-2">
+            <div class="demo-current">
+              <div class="panel-label">Current task</div>
+              <div id="demo-current-task" class="demo-current-title">—</div>
+              <div class="demo-current-meta">
+                <span class="demo-chip" id="demo-current-prio">—</span>
+                <span class="demo-chip" id="demo-current-deadline">—</span>
+                <span class="demo-chip" id="demo-current-status">—</span>
+              </div>
+              <div id="demo-current-desc" class="hint" style="margin-top:8px"></div>
+            </div>
+            <div class="demo-why">
+              <div class="panel-label">WHY THIS TASK?</div>
+              <ul id="demo-why-list" class="demo-why-list"></ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="panel-label">SCHEDULING POLICY</div>
+            <div class="demo-policy-badges">
+              <span class="policy-badge">Priority ✓</span>
+              <span class="policy-badge">Deadline ✓</span>
+              <span class="policy-badge">Dependencies ✓</span>
+            </div>
+            <div class="hint" style="margin:6px 0 10px">Kernorq ranks <strong>READY</strong> tasks — CSV order is never executed directly.</div>
+            <div class="panel-label" style="margin-top:10px">READY TASKS (live)</div>
+            <div id="demo-ready-tasks" class="demo-ready-list"></div>
+          </div>
+          <div class="card">
+            <div class="panel-label">EXECUTION TIMELINE — actual backend order</div>
+            <div id="demo-timeline" class="demo-timeline"></div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="panel-label">EXECUTION</div>
+            <div id="demo-exec-check" class="demo-check">○ Tool executed</div>
+            <div class="panel-label" style="margin-top:12px">VERIFICATION</div>
+            <div id="demo-ver-check" class="demo-check">○ Evidence verified</div>
+            <div id="demo-test-evidence" class="demo-test-evidence hidden"></div>
+          </div>
+          <div class="card">
+            <div class="panel-label">DEPENDENCY VISUALIZATION</div>
+            <div id="demo-deps" class="demo-deps"></div>
+          </div>
+        </div>
+
+        <!-- Live work surface — artifact-first, backend-driven -->
+        <div class="card" id="work-produced-card">
+          <div class="panel-label">WORK PRODUCED SO FAR</div>
+          <div id="work-produced" class="work-produced"></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card" id="research-findings-card">
+            <div class="panel-label">RESEARCH FINDINGS — live</div>
+            <div id="research-findings" class="research-findings"></div>
+            <div id="research-sources" class="research-sources"></div>
+          </div>
+          <div class="card" id="competitor-board-card">
+            <div class="panel-label">COMPETITOR LANDSCAPE</div>
+            <div id="competitor-board" class="competitor-board"></div>
+            <div id="competitor-patterns" class="competitor-patterns"></div>
+          </div>
+        </div>
+
+        <div class="card" id="carousel-card">
+          <div class="panel-label">INSTAGRAM CAROUSEL — 5 SLIDES</div>
+          <div class="carousel-nav" id="carousel-nav"></div>
+          <div id="carousel-content" class="carousel-content"></div>
+          <div id="carousel-caption" class="carousel-caption"></div>
+          <div id="visual-assets" class="visual-assets"></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="panel-label">KERNORQ DISCOVERED</div>
+            <div id="discoveries" class="discoveries"></div>
+          </div>
+          <div class="card">
+            <div class="panel-label">NEEDS YOUR ATTENTION</div>
+            <div id="needs-attention" class="needs-attention"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="panel-label">READY FOR YOU</div>
+          <div id="ready-for-you" class="ready-for-you"></div>
+        </div>
+
+        <div id="demo-completion" class="card demo-completion hidden">
+          <div class="demo-completion-title">KERNORQ — WORKLOAD COMPLETED</div>
+          <div id="demo-completion-stats" class="demo-completion-stats"></div>
+          <div id="demo-completion-order" class="demo-order"></div>
+        </div>
+      </div>
+
+      <div id="demo-completion-hero" class="hidden"></div>
+
+      <details class="card" style="margin-bottom:14px">
+        <summary class="panel-label" style="cursor:pointer">▸ Technical execution details</summary>
+        <div style="margin-top:14px">
+          <div class="pipeline-wrap card" style="margin-bottom:14px">
+            <div class="panel-label">EXECUTION PIPELINE</div>
+            <ol id="pipeline" class="pipeline-v"></ol>
+            <div id="pipeline-note" class="hint"></div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <div class="panel-label">OPERATIONAL STATE</div>
+              <ul id="op-state" class="op-state"></ul>
+            </div>
+            <div class="card">
+              <div class="panel-label">EXECUTION CONTROL</div>
+              <ul id="control-state" class="op-state"></ul>
+              <div class="hint mono">AI proposes · Kernorq validates · Deterministic executor</div>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <div class="panel-label">VERIFICATION</div>
+              <div id="x-verification"></div>
+            </div>
+            <div class="card">
+              <div class="panel-label">RECOVERY</div>
+              <div id="x-recovery"></div>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <div class="card result-card hidden" id="result-card">
+        <div id="result-hero" class="result-hero"></div>
+        <div id="result-summary" class="result-summary"></div>
+        <div class="result-actions">
+          <button id="speak-btn" class="btn ghost" title="Play spoken summary">🔊 Play summary</button>
+          <button id="stop-speak-btn" class="btn ghost hidden" title="Stop playback">■ Stop</button>
+          <span id="speaking-indicator" class="hint hidden">Kernorq is speaking…</span>
+        </div>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="timeline" role="tab">Timeline</button>
+        <button class="tab" data-tab="tasks" role="tab">Tasks</button>
+        <button class="tab" data-tab="evidence" role="tab">Evidence</button>
+      </div>
+
+      <div id="tab-timeline" class="tab-panel">
+        <div class="card"><div id="x-timeline" class="timeline"></div></div>
+      </div>
+      <div id="tab-tasks" class="tab-panel hidden">
+        <div class="card"><div id="x-tasks"></div></div>
+      </div>
+      <div id="tab-evidence" class="tab-panel hidden">
+        <div class="card">
+          <div id="x-evidence-human"></div>
+          <details><summary>View raw evidence</summary><pre id="x-evidence-raw" class="mono small raw"></pre></details>
+          <details id="demo-evidence-details" class="hidden"><summary>▸ Execution details</summary><pre id="demo-raw-details" class="mono small raw"></pre></details>
+          <details id="demo-tool-details" class="hidden"><summary>▸ Tool output</summary><pre id="demo-tool-output" class="mono small raw"></pre></details>
+          <details id="demo-ver-details" class="hidden"><summary>▸ Verification evidence</summary><pre id="demo-ver-output" class="mono small raw"></pre></details>
+          <details id="demo-history-details" class="hidden"><summary>▸ Execution history</summary><pre id="demo-history-output" class="mono small raw"></pre></details>
+        </div>
+      </div>
+
+      <div id="conn-error" class="conn-error hidden">Connection temporarily unavailable — last known state: <span id="last-known"></span>. Retrying…</div>
+    </section>
+
+    <!-- ============ ACTIVITY ============ -->
+    <section id="view-activity" class="view">
+      <header class="top-header"><h2>Activity</h2></header>
+      <div class="filters">
+        <button class="chip filter active" data-filter="all">All</button>
+        <button class="chip filter" data-filter="EXECUTING">Running</button>
+        <button class="chip filter" data-filter="COMPLETED">Completed</button>
+        <button class="chip filter" data-filter="FAILED">Failed</button>
+      </div>
+      <div id="activity-list" class="activity-list"></div>
+    </section>
+
+    <!-- ============ PROJECTS ============ -->
+    <section id="view-projects" class="view">
+      <header class="top-header"><h2>Projects</h2></header>
+      <div class="card project-card">
+        <div class="proj-name mono">kernorq</div>
+        <div class="hint mono" id="project-path">Detecting workspace…</div>
+        <div class="hint">Objectives run against this workspace. Tools are validated before execution.</div>
+      </div>
+    </section>
+
+    <!-- ============ SETTINGS ============ -->
+    <section id="view-settings" class="view">
+      <header class="top-header"><h2>Settings</h2></header>
+      <div class="card">
+        <div class="panel-label">VOICE</div>
+        <label class="toggle"><input type="checkbox" id="voice-enabled" checked> Enable spoken responses</label>
+        <div id="settings-voice-hint" class="hint"></div>
+      </div>
+      <div class="card">
+        <div class="panel-label">MODEL</div>
+        <div class="mono small" id="settings-model">gemini-3.5-flash (from MODEL_NAME)</div>
+        <div class="hint">Planning uses Gemini. Execution is deterministic — the model never mutates state directly.</div>
+      </div>
+      <div class="card">
+        <div class="panel-label">APPEARANCE</div>
+        <label class="toggle"><input type="checkbox" id="reduced-motion-toggle"> Reduce motion</label>
+      </div>
+    </section>
   </main>
 </div>
-
 <script src="/static/app.js"></script>
 </body>
 </html>

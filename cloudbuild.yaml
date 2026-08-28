@@ -1,0 +1,33 @@
+steps:
+  # Build the container image (server-side build; no local Docker required)
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "us-central1-docker.pkg.dev/$PROJECT_ID/kernorq/kernorq:$SHORT_SHA"
+      - "."
+  # Push to Artifact Registry
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "us-central1-docker.pkg.dev/$PROJECT_ID/kernorq/kernorq:$SHORT_SHA"
+  # Deploy to Cloud Run (secret injected from Secret Manager at runtime)
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      - "run"
+      - "deploy"
+      - "kernorq"
+      - "--image=us-central1-docker.pkg.dev/$PROJECT_ID/kernorq/kernorq:$SHORT_SHA"
+      - "--region=us-central1"
+      - "--platform=managed"
+      - "--allow-unauthenticated"
+      - "--min-instances=0"
+      - "--max-instances=2"
+      - "--set-secrets=GOOGLE_API_KEY=kernorq-google-api-key:latest"
+
+substitutions:
+  _REGION: "us-central1"
+
+options:
+  logging: CLOUD_LOGGING_ONLY

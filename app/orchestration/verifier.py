@@ -213,6 +213,324 @@ class VerificationStrategyRegistry:
         return sorted(self._strategies.keys())
 
 
+def _verify_run_test_suite(
+    task: Task,
+    execution: Execution,
+) -> VerificationResult:
+    """
+    Semantic verification for run_test_suite.
+
+    Rules:
+    - result is None -> UNKNOWN
+    - status == "no_test_suite" or error.type == NoTestSuiteFound / PytestNotAvailable
+      -> VERIFIED_SUCCESS with explicit NO_TEST_SUITE_FOUND outcome: the tool
+      executed once, deterministically determined no suite exists, and that is
+      a definitive, handled answer to the objective (never UNKNOWN, never retried).
+    - exit_code is None and status is error -> VERIFIED_FAILURE or UNKNOWN (timeout)
+    - exit_code == 0 and passed >0 and test_count >0 -> VERIFIED_SUCCESS
+    - exit_code == 0 but test_count ==0 -> VERIFIED_FAILURE (no tests actually executed)
+    - exit_code == 1 and failed >0 -> VERIFIED_FAILURE (tests ran but failed — surfaces failure, not false success)
+    - otherwise inspect failed/skipped and test_count for semantic success.
+    """
+    result = task.result
+    if result is None:
+        return VerificationResult(
+            status=VerificationStatus.UNKNOWN,
+            message="No tool result stored for run_test_suite",
+            evidence={"task_id": task.task_id, "operation_id": task.operation_id},
+            timestamp=utc_now(),
+        )
+
+    # Deterministic precondition answers: definitive, handled outcomes
+    error = result.get("error") if isinstance(result.get("error"), dict) else None
+    status = result.get("status")
+    error_type = (error or {}).get("type") if error else None
+
+    if status == "no_test_suite" or error_type in {"NoTestSuiteFound", "PytestNotAvailable"}:
+        return VerificationResult(
+            status=VerificationStatus.VERIFIED_SUCCESS,
+            message=f"No test suite found: {(error or {}).get('message', 'project has no runnable tests')}",
+            evidence={
+                "task_id": task.task_id,
+                "operation_id": task.operation_id,
+                "status": status,
+                "error_type": error_type,
+                "explicit_outcome": "NO_TEST_SUITE_FOUND",
+                "command": result.get("command"),
+                "exit_code": result.get("exit_code"),
+                "test_count": 0,
+                "user_message": (
+                    "No test suite was found in this project, so there is nothing to run "
+                    "and no failures to report."
+                ),
+            },
+            timestamp=utc_now(),
+        )
+
+    exit_code = result.get("exit_code")
+    passed = result.get("passed", 0)
+    failed = result.get("failed", 0)
+    skipped = result.get("skipped", 0)
+    test_count = result.get("test_count", 0)
+    command = result.get("command", "")
+
+    # Must have actually executed pytest
+    if exit_code is None:
+        # Could be timeout / unknown
+        if error_type == "TimeoutError":
+            return VerificationResult(
+                status=VerificationStatus.UNKNOWN,
+                message="run_test_suite timed out",
+                evidence={
+                    "task_id": task.task_id,
+                    "operation_id": task.operation_id,
+                    "error": error,
+                    "command": command,
+                },
+                timestamp=utc_now(),
+            )
+        return VerificationResult(
+            status=VerificationStatus.VERIFIED_FAILURE,
+            message="run_test_suite did not return an exit_code; cannot verify execution",
+            evidence={
+                "task_id": task.task_id,
+                "operation_id": task.operation_id,
+                "result_keys": list(result.keys()),
+                "status": status,
+                "error": error,
+            },
+            timestamp=utc_now(),
+        )
+
+    # pytest exit_code 5 already handled above but keep for safety
+    if exit_code == 5:
+        return VerificationResult(
+            status=VerificationStatus.VERIFIED_SUCCESS,
+            message="No tests collected (exit_code 5) — no test suite to run",
+            evidence={
+                "task_id": task.task_id,
+                "operation_id": task.operation_id,
+                "exit_code": exit_code,
+                "explicit_outcome": "NO_TEST_SUITE_FOUND",
+            },
+            timestamp=utc_now(),
+        )
+
+    # Semantic check: must have test_count >0 to be meaningful
+    if test_count == 0:
+        return VerificationResult(
+            status=VerificationStatus.VERIFIED_FAILURE,
+            message="No tests were executed (test_count is 0)",
+            evidence={
+                "task_id": task.task_id,
+                "operation_id": task.operation_id,
+                "exit_code": exit_code,
+                "passed": passed,
+                "failed": failed,
+                "test_count": test_count,
+                "explicit_outcome": "NO_TEST_SUITE_FOUND",
+            },
+            timestamp=utc_now(),
+        )
+
+    # Failing tests -> surface as failure (not false success)
+    if failed > 0 or exit_code == 1:
+        return VerificationResult(
+            status=VerificationStatus.VERIFIED_FAILURE,
+            message=f"Tests executed but {failed} failed (passed={passed}, failed={failed}, skipped={skipped})",
+            evidence={
+                "task_id": task.task_id,
+                "operation_id": task.operation_id,
+                "exit_code": exit_code,
+                "passed": passed,
+                "failed": failed,
+                "skipped": skipped,
+                "test_count": test_count,
+                "command": command,
+                "stdout_tail": (result.get("stdout") or "")[-500:],
+            },
+            timestamp=utc_now(),
+        )
+
+    # Non-zero exit not 0/1/5 -> failure
+    if exit_code != 0:
+        return VerificationResult(
+            status=VerificationStatus.VERIFIED_FAILURE,
+            message=f"pytest exited with code {exit_code}",
+            evidence={
+                "task_id": task.task_id,
+                "operation_id": task.operation_id,
+                "exit_code": exit_code,
+                "passed": passed,
+                "failed": failed,
+                "test_count": test_count,
+                "error": error,
+            },
+            timestamp=utc_now(),
+        )
+
+    # exit_code 0, failed ==0, test_count >0 -> true success
+    # Also ensure command actually was pytest
+    if "pytest" not in command:
+        return VerificationResult(
+            status=VerificationStatus.VERIFIED_FAILURE,
+            message="Test suite command did not invoke pytest",
+            evidence={
+                "task_id": task.task_id,
+                "operation_id": task.operation_id,
+                "command": command,
+                "exit_code": exit_code,
+            },
+            timestamp=utc_now(),
+        )
+
+    return VerificationResult(
+        status=VerificationStatus.VERIFIED_SUCCESS,
+        message=f"Test suite executed: {passed} passed, {failed} failed, {skipped} skipped",
+        evidence={
+            "task_id": task.task_id,
+            "operation_id": task.operation_id,
+            "exit_code": exit_code,
+            "passed": passed,
+            "failed": failed,
+            "skipped": skipped,
+            "test_count": test_count,
+            "command": command,
+        },
+        timestamp=utc_now(),
+    )
+
+
+def _verify_project_diagnostics(
+    task: Task,
+    execution: Execution,
+) -> VerificationResult:
+    """
+    Semantic verification for project_diagnostics.
+
+    Rules:
+    - result is None -> UNKNOWN
+    - tool failure (success False / status error) -> VERIFIED_FAILURE
+      (TimeoutError-type errors remain UNKNOWN for recovery)
+    - no checks_run or empty checks_run -> VERIFIED_FAILURE (tool did not
+      actually perform diagnostics; success=true alone is NEVER sufficient)
+    - status == "issues_found" with a list of issues ->
+      VERIFIED_SUCCESS (diagnostics ran and found issues — that is the
+      objective fulfilled) with issue evidence
+    - status == "clean" with checks evidence -> VERIFIED_SUCCESS clean
+    - inspect-style payloads ({success, files}) or any other shape ->
+      VERIFIED_FAILURE
+    """
+    result = task.result
+    if result is None:
+        return VerificationResult(
+            status=VerificationStatus.UNKNOWN,
+            message="No tool result stored for project_diagnostics",
+            evidence={"task_id": task.task_id, "operation_id": task.operation_id},
+            timestamp=utc_now(),
+        )
+    if not isinstance(result, dict):
+        return VerificationResult(
+            status=VerificationStatus.VERIFIED_FAILURE,
+            message="Diagnostics result is not a structured dict",
+            evidence={"task_id": task.task_id, "result_type": type(result).__name__},
+            timestamp=utc_now(),
+        )
+
+    error = result.get("error") if isinstance(result.get("error"), dict) else None
+    error_type = (error or {}).get("type")
+    status = result.get("status")
+    checks_run = result.get("checks_run")
+    checks_ok = isinstance(checks_run, list) and len(checks_run) > 0
+
+    if result.get("success") is False or status == "error":
+        if error_type == "TimeoutError":
+            return VerificationResult(
+                status=VerificationStatus.UNKNOWN,
+                message="project_diagnostics timed out",
+                evidence={"task_id": task.task_id, "error": error},
+                timestamp=utc_now(),
+            )
+        return VerificationResult(
+            status=VerificationStatus.VERIFIED_FAILURE,
+            message="Diagnostics tool failed before performing checks",
+            evidence={
+                "task_id": task.task_id,
+                "operation_id": task.operation_id,
+                "status": status,
+                "error": error,
+            },
+            timestamp=utc_now(),
+        )
+
+    # success=true alone is not sufficient — real checks are required
+    if not checks_ok:
+        return VerificationResult(
+            status=VerificationStatus.VERIFIED_FAILURE,
+            message="No diagnostics checks were performed (checks_run empty or missing)",
+            evidence={
+                "task_id": task.task_id,
+                "operation_id": task.operation_id,
+                "result_keys": sorted(result.keys()),
+            },
+            timestamp=utc_now(),
+        )
+
+    issues = result.get("issues") if isinstance(result.get("issues"), list) else None
+    warnings = result.get("warnings") if isinstance(result.get("warnings"), list) else []
+
+    if status == "issues_found":
+        if issues is None:
+            return VerificationResult(
+                status=VerificationStatus.VERIFIED_FAILURE,
+                message="status=issues_found but 'issues' is missing or not a list",
+                evidence={"task_id": task.task_id, "result_keys": sorted(result.keys())},
+                timestamp=utc_now(),
+            )
+        return VerificationResult(
+            status=VerificationStatus.VERIFIED_SUCCESS,
+            message=f"Diagnostics executed: {len(issues)} issue(s), {len(warnings)} warning(s) found",
+            evidence={
+                "task_id": task.task_id,
+                "operation_id": task.operation_id,
+                "checks_run": checks_run,
+                "files_inspected": result.get("files_inspected"),
+                "issue_count": len(issues),
+                "warning_count": len(warnings),
+                "issues_preview": [i.get("message") for i in issues[:5] if isinstance(i, dict)],
+            },
+            timestamp=utc_now(),
+        )
+
+    if status == "clean":
+        return VerificationResult(
+            status=VerificationStatus.VERIFIED_SUCCESS,
+            message=f"Diagnostics executed: project clean across {len(checks_run)} checks",
+            evidence={
+                "task_id": task.task_id,
+                "operation_id": task.operation_id,
+                "checks_run": checks_run,
+                "files_inspected": result.get("files_inspected"),
+                "issue_count": 0,
+                "warning_count": len(warnings),
+                "explicit_outcome": "CLEAN",
+            },
+            timestamp=utc_now(),
+        )
+
+    # Any other shape (including inspect-style {success, files} payloads) fails
+    return VerificationResult(
+        status=VerificationStatus.VERIFIED_FAILURE,
+        message=f"Unrecognized diagnostics result shape (status={status!r}); objective not semantically verified",
+        evidence={
+            "task_id": task.task_id,
+            "operation_id": task.operation_id,
+            "result_keys": sorted(result.keys()),
+        },
+        timestamp=utc_now(),
+    )
+
+
 def create_default_strategy_registry() -> VerificationStrategyRegistry:
     """
     Returns a VerificationStrategyRegistry pre-configured with strategies
@@ -223,11 +541,39 @@ def create_default_strategy_registry() -> VerificationStrategyRegistry:
     Requiring only ['success','files'] keeps verification evidence-based
     while remaining compatible with both real tool output and synthetic
     test payloads that use 'directory'.
+
+    run_test_suite uses semantic verification: it confirms pytest actually
+    ran, parses exit_code/passed/failed, and returns explicit
+    NO_TEST_SUITE_FOUND rather than false verified_success.
+
+    project_diagnostics uses semantic verification: success=true alone is
+    never sufficient — checks_run must be non-empty and status must be
+    issues_found or clean with structured evidence.
     """
     registry = VerificationStrategyRegistry()
     registry.register(
         "inspect_project_workspace",
         _verify_required_fields_present(["success", "files"]),
+    )
+    registry.register(
+        "run_test_suite",
+        _verify_run_test_suite,
+    )
+    registry.register(
+        "project_diagnostics",
+        _verify_project_diagnostics,
+    )
+    registry.register(
+        "research_topic",
+        _verify_required_fields_present(["success", "findings"]),
+    )
+    registry.register(
+        "analyze_competitors",
+        _verify_required_fields_present(["success", "competitors"]),
+    )
+    registry.register(
+        "generate_carousel",
+        _verify_required_fields_present(["success", "slides"]),
     )
     return registry
 

@@ -75,10 +75,24 @@ def test_ui_served_at_root():
         client = TestClient(app)
         resp = client.get("/")
         assert resp.status_code == 200
-        assert "Agentic Execution" in resp.text
-        assert "EXECUTIONS" in resp.text
-        assert "OBJECTIVE" in resp.text
-        assert "EXECUTION PIPELINE" in resp.text
+        text = resp.text
+        # Product identity
+        assert "Kernorq" in text
+        # Judge demo hero — authoritative workload entry point
+        assert "Turn workloads into verified outcomes" in text
+        assert "Golden Demo Workload" in text
+        assert "Run Workload" in text
+        # Composer still available for arbitrary objectives
+        assert "Tell Kernorq what you want done..." in text
+        assert "Execute Objective" in text
+        # Voice affordance present
+        assert "mic-btn" in text
+        assert 'aria-label="Speak to Kernorq"' in text
+        # Suggested objectives actually submit
+        assert "Inspect my project and report its structure" in text
+        # Primary areas only — internals live in execution details
+        for nav in ["Home", "Activity", "Projects", "Settings"]:
+            assert f'data-nav="{nav.lower()}"' in text
     finally:
         try:
             store.close()

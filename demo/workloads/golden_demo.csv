@@ -1,0 +1,23 @@
+﻿TaskID,Task,Category,DueDate,Priority,Dependencies,What Kernorq should do
+1,Finish Database Systems homework,🎓 University,2026-08-27,🔴 High,14,"Complete exercises, run tests, report failures"
+2,Research AI agent reliability,🔬 Research,2026-08-28,🔴 High,,"Find 3+ sources, summarize findings, save notes"
+3,Review Kernorq project health,💻 Project,2026-08-26,🔴 High,,"Inspect project, run tests, diagnose problems"
+4,Fix identified Kernorq bugs,💻 Project,2026-08-27,🔴 High,3,Investigate failures and implement fixes
+5,Prepare client landing page,🤝 Client,2026-08-27,🔴 High,,Inspect requirements and prepare changes
+6,Review client feedback,🤝 Client,2026-08-26,🔴 High,,Analyze feedback and identify required actions
+7,Prepare client follow-up,🤝 Client,2026-08-26,🟡 Medium,,Prepare message and identify missing information
+8,Research competitor landing pages,🤝 Client Research,2026-08-29,🟡 Medium,,Research competitors and summarize useful patterns
+9,Create Instagram carousel,📱 Content,2026-08-28,🟡 Medium,12,"Create hook, slides, CTA and caption"
+10,Prepare carousel for publishing,📱 Content,2026-08-29,🟡 Medium,9,"Check copy, visuals, CTA and publishing requirements"
+11,Schedule content,📱 Content,2026-08-30,🟡 Medium,10,Prepare scheduled publishing task
+12,Prepare weekly content plan,📱 Content,2026-08-27,🟡 Medium,8,"Decide topics, order and publishing dates"
+13,Plan weekly workload,🧠 Planning,2026-08-26,🔴 High,,Prioritize everything and detect conflicts
+14,Organize academic deadlines,🎓 University,2026-08-26,🟡 Medium,13,Identify deadlines and dependencies
+15,Prepare research notes,🔬 Research,2026-08-29,🟡 Medium,,Organize sources and findings
+16,Complete academic project milestone,🎓 University,2026-08-30,🔴 High,1,Execute available project tasks and verify results
+17,Test Kernorq recovery,🤖 Kernorq Demo,2026-08-26,🔴 High,4,Trigger missing-test scenario and verify no unnecessary retry
+18,Test real test-suite execution,🤖 Kernorq Demo,2026-08-26,🔴 High,17,Find an available test suite and execute it
+19,Generate client status report,🤝 Client,2026-08-30,🟡 Medium,,"Report completed, blocked and remaining work"
+20,Generate weekly workload report,📊 Reporting,2026-08-30,🟡 Medium,,Summarize all execution results and failures
+21,Review unfinished tasks,🧠 Planning,2026-08-30,🟡 Medium,,Identify incomplete and blocked work
+22,Prepare next-week priorities,🧠 Planning,2026-08-30,🟢 Low,,Generate prioritized next actions

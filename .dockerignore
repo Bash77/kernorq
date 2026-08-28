@@ -1,0 +1,36 @@
+# Never bake secrets or environment into the image
+.env
+.env.*
+!.env.example
+
+# VCS / tooling
+.git
+.gitignore
+.agents
+.vscode
+.idea
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+
+# Virtual environments (host-side)
+.venv
+venv/
+
+# Local runtime artifacts
+*.db
+*.db-shm
+*.db-wal
+executions.db*
+
+# Docs & helpers not needed in the runtime image
+# tests/ IS included: run_test_suite executes pytest inside Cloud Run.
+# Do not re-exclude tests — a deployment/build guard test enforces this.
+docs
+scripts
+skills-lock.json
+
+# Cloud/deploy helpers are not needed inside the image
+cloudbuild.yaml
+deploy

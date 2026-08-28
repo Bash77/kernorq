@@ -47,6 +47,18 @@ class GeminiModelClient:
                 "(or configure GOOGLE_CLOUD_PROJECT for Vertex AI)"
             )
 
+        # Create client.
+        # API-key path (Gemini Developer API) takes precedence and is forced with
+        # vertexai=False so GOOGLE_GENAI_USE_VERTEXAI=true in .env cannot silently
+        # redirect an api_key client to Vertex. The stale flag is neutralized
+        # BEFORE the SDK import because google-genai caches it at import time;
+        # Vertex remains available when no key is configured (reversible).
+        if self.api_key:
+            os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "false"
+            self.auth_mode = "gemini-api"
+        else:
+            self.auth_mode = "vertex-ai"
+
         # Lazy import to avoid hard dependency at import time
         try:
             from google import genai  # type: ignore
@@ -56,7 +68,7 @@ class GeminiModelClient:
         # Create client
         try:
             if self.api_key:
-                self._client = genai.Client(api_key=self.api_key)
+                self._client = genai.Client(api_key=self.api_key, vertexai=False)
             else:
                 # Vertex AI mode — relies on ADC
                 self._client = genai.Client(vertexai=True, project=self.project, location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"))
@@ -82,17 +94,27 @@ You must propose a structured execution plan as JSON with:
   - "task_id": string (snake_case, unique, 1-64 chars)
   - "title": string (short title)
   - "description": string (detailed)
-  - "tool_name": string or null (MUST be one of {allowed_tools} or null)
-  - "tool_input": object (e.g., {{"directory_path": "."}} for inspect_project_workspace)
+  - "tool_name": string (REQUIRED — MUST be exactly one of {allowed_tools}; never null, never a new name)
+  - "tool_input": object (e.g., {{"directory_path": "."}} for inspect_project_workspace, {{"test_path": "tests"}} for run_test_suite)
   - "dependencies": array of task_id strings (must reference existing tasks)
   - "max_attempts": integer 1-5 (default 3)
 
+Available tool semantics:
+- inspect_project_workspace: {{ "directory_path": "." }} — returns files/directories/checks; use ONLY for plain exploration/listing objectives.
+- run_test_suite: {{ "test_path": "tests" }} — actually executes pytest and returns exit_code/passed/failed/skipped/stdout; use for any objective that asks to run, execute, or report on the test suite.
+- project_diagnostics: {{ "directory_path": "." }} — performs real read-only diagnostics (syntax, imports, config, dependencies, tests) and returns issues/warnings/checks_run/status; use for any objective that asks to check the project for problems, find bugs, audit, review health, or diagnose issues.
+
 Rules:
-- Only use tools in {allowed_tools}. Never invent a tool.
+- For objectives containing "run test", "test suite", "pytest", "report failures", "run tests", you MUST use run_test_suite (not inspect_project_workspace).
+- For objectives containing "check my project", "problems", "find bugs", "audit", "diagnose", "issues", "health check", you MUST use project_diagnostics (not inspect_project_workspace).
+- Every task MUST use one of these registered tools: {allowed_tools}.
+- Never invent tools. Never omit tool_name.
 - Respect dependency ordering; no cycles; no self-dependency.
 - Output JSON ONLY, no markdown fences, no explanation.
-- Example for inspect_project_workspace:
+- Examples:
   {{"task_id": "inspect_workspace", "title": "Inspect workspace", "description": "Inspect repository structure", "tool_name": "inspect_project_workspace", "tool_input": {{"directory_path": "."}}, "dependencies": [], "max_attempts": 2}}
+  {{"task_id": "run_tests", "title": "Run test suite", "description": "Execute pytest and report results", "tool_name": "run_test_suite", "tool_input": {{"test_path": "tests"}}, "dependencies": [], "max_attempts": 2}}
+  {{"task_id": "diagnose_project", "title": "Diagnose project", "description": "Run read-only diagnostics for problems and bugs", "tool_name": "project_diagnostics", "tool_input": {{"directory_path": "."}}, "dependencies": [], "max_attempts": 2}}
 
 Generate the plan now as JSON:
 """

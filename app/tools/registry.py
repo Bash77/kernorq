@@ -4,6 +4,9 @@ from collections.abc import Callable
 from typing import Any
 
 from app.tools import inspect_project_workspace
+from app.tools.content import analyze_competitors, generate_carousel, research_topic
+from app.tools.project_diagnostics import project_diagnostics
+from app.tools.run_test_suite import run_test_suite
 
 
 class DuplicateToolError(Exception):
@@ -58,6 +61,11 @@ def create_default_tool_registry() -> ToolRegistry:
     """Creates a ToolRegistry pre-populated with standard project tools."""
     registry = ToolRegistry()
     registry.register("inspect_project_workspace", inspect_project_workspace)
+    registry.register("run_test_suite", run_test_suite)
+    registry.register("project_diagnostics", project_diagnostics)
+    registry.register("research_topic", research_topic)
+    registry.register("analyze_competitors", analyze_competitors)
+    registry.register("generate_carousel", generate_carousel)
     return registry
 
 

@@ -1,649 +1,136 @@
-﻿# Demo Specification
+﻿# Kernorq — Video Demo Script (3:55)
 
-## Purpose
+> **Goal:** Prove to a judge in <4 minutes that Kernorq is a real autonomous execution system — not a chatbot wrapper — that can take an outcome, create a plan, execute it, survive a failure, recover safely, and finish with verified evidence, running on Google Cloud.
 
-The demo must prove that the Autonomous Project Delivery Agent is a
-real autonomous execution system rather than a conversational AI wrapper.
-
-The judge should see:
-
-1. A high-level objective.
-2. Autonomous planning.
-3. Multiple real actions.
-4. Persistent execution state.
-5. Verification.
-6. A controlled failure.
-7. Autonomous recovery.
-8. Continued execution.
-9. Verified completion.
-10. Evidence of Google Cloud deployment.
-
-The demo should feel like one continuous execution story.
+**Recording setup**
+- Resolution: 1920x1080, 30fps, system audio + mic
+- Environment: clean checkout, `demo/workloads/golden_demo.csv` (22 tasks), Cloud Run service `kernorq-00006-p6w` live
+- Failure mode: deterministic demo flag `KERNORQ_DEMO_FAILURE=timeout` — makes the 4th task’s first verification timeout (UNKNOWN state). Production default is OFF.
+- Total runtime: 3:55 (leaves 5s buffer under 4:00 limit)
 
 ---
 
-# 1. Demo Scenario
+### Cast & Preconditions
 
-Primary scenario:
+| Item | Value |
+|------|-------|
+| Objective typed live | `Get this project ready for submission.` |
+| Workload shown | `demo/workloads/golden_demo.csv` — 22 tasks, priority/deadline/dependencies |
+| Execution engine | Existing orchestrator → executor → verifier → recovery (no second engine) |
+| State store | SQLite (`executions.db`, WAL), thread-safe, checkpoints |
+| Model | `gemini-3.5-flash` via Google ADK (only for planning) |
+| Cloud | `https://kernorq-937607726293.us-central1.run.app` — Cloud Run, Artifact Registry, Secret Manager |
 
-"Get this project ready for submission."
-
-The project contains a realistic set of incomplete or failing conditions.
-
-The user does NOT provide a detailed task list.
-
-The agent must discover what needs to happen.
-
----
-
-# 2. Opening
-
-Target duration:
-
-0:00 - 0:20
-
-Show the problem.
-
-Narration concept:
-
-"AI assistants can tell us what to do. The problem is that someone
-still has to coordinate the work.
-
-We built an agent that takes the outcome instead of the checklist."
-
-Show:
-
-- project dashboard
-- project state
-- incomplete requirements
-
-Do not spend time explaining every technical component.
+**Before recording checklist:** `uv run pytest -q` → 329 passed, 2 skipped. Workload preview shows 22 tasks, `planned_order` matches dependency-aware schedule. Cloud Run service URL reachable.
 
 ---
 
-# 3. User Goal
+### Timeline — Visual | Narration (speak verbatim) | On-screen proof
 
-Target duration:
+**0:00–0:18 — Opening: The problem (show dashboard, no narration over music yet)**
+- *Visual:* Static on Kernorq home: hero `KERNORQ — Turn workloads into verified outcomes` + Project `Kernorq Demo Project` / Workload `Golden Demo Workload — 22 tasks` + workload table (readable, priority pills).
+- *Narration (0:08):* “AI assistants can tell us what to do. Someone still has to coordinate the work. We built Kernorq to take the outcome — not the checklist.”
+- *Proof on screen:* No fake data — table rendered from `GET /workloads/golden` (22 rows, `TaskID`/`Category`/`DueDate`/`Priority`).
 
-0:20 - 0:35
+**0:18–0:32 — Give the outcome**
+- *Action:* Cursor types in composer: `Get this project ready for submission.` → clicks `Execute Objective →`.
+- *Visual:* Objective banner appears instantly, `execution_id: exec_…` visible, status pill `STARTING`.
+- *Narration:* “I give it the outcome. Not the steps. Not the task list.”
+- *Proof:* Network tab shows `POST /executions 201` with that objective — no hidden workflow.
 
-User enters:
+**0:32–0:52 — Autonomous planning (no human steps)**
+- *Visual:* `PLAN` panel expands: `PROJECT DELIVERY PLAN` — 6–7 steps generated live:
+  `1 Inspect repository · 2 Validate requirements · 3 Run tests · 4 Resolve missing requirement · 5 Regenerate artifact · 6 Re-run verification · 7 Produce evidence`
+- *Narration:* “Kernorq inspects the repo, discovers requirements, and generates its own plan. No template — the 22-task workload was the input, priority and deadline decided the order.”
+- *Proof:* Plan JSON visible in expanded `Execution details` — `tool_name` values are only registered tools (`inspect_project_workspace`, `run_test_suite`, `project_diagnostics`, `research_topic`).
 
-"Get this project ready for submission."
+**0:52–1:32 — Real autonomous execution (user hands off)**
+- *Visual:* `KERNORQ IS ORCHESTRATING` hero card — `Current task: 13 — Plan weekly workload • Priority HIGH • Due Aug 26 • EXECUTING` + `WHY THIS TASK? ✓ READY · Highest rank · Deadline considered · Dependencies satisfied` + live `READY TASKS` list + `EXECUTION TIMELINE` (`13 ✓ COMPLETED → 3 ✓ COMPLETED → 6 ✓ COMPLETED → 4 ▶ EXECUTING`…) — all derived from `GET /executions/{id}/tasks`.
+- *Narration:* “Now it works alone. Every task is a real tool call — not a simulation. You can see it ranking READY tasks — it never runs a blocked task just because its priority is higher.”
+- *Proof:* Show `SCHEDULING POLICY: Priority ✓ Deadline ✓ Dependencies ✓` and that `B(5, depends on A)` waits behind `A` even though `B` outranks others. Timeline icons come from backend `event_type`.
 
-The interface should visibly show the submitted objective.
+**1:32–1:48 — Persistent state**
+- *Visual:* Hover `EXECUTION PIPELINE` → `Execution ID: exec_415544456154`, `Status: EXECUTING`, `Completed: task_001, task_002, task_003 / Current: task_004 / Pending: task_005…` + `CHECKPOINT_CREATED` events in timeline.
+- *Narration:* “Every step is persisted — execution ID, checkpoints, task results. If the browser closes, the work continues. This is not chat history.”
+- *Proof:* `GET /executions/{id}` snapshot visible; `checkpoints` array growing.
 
-No hidden preconfigured workflow should make the result appear
-automatic.
+**1:48–2:14 — Controlled failure: timeout → UNKNOWN**
+- *Visual:* Task 4 `VERIFYING…` → `✕ Verification Failed — Timeout while verifying operation.` Status pill `VERIFYING`, `Task 4: VERIFYING → FAILED`.
+- *Narration:* “We inject one deterministic timeout — the kind that happens in production. The verifier does not guess. It marks the outcome UNKNOWN: did the operation actually complete?”
+- *Proof:* `VERIFICATION_FAILED` event metadata shows `is_unknown: true`, `error_type: TimeoutError`. No manual “Retry” button pressed.
 
----
+**2:14–2:32 — Unknown-state handling (the differentiator)**
+- *Visual:* `Recovery` card appears: `Execution state uncertain. Did the previous operation actually complete? Checking external state… → Operation not completed. Retry is safe.`
+- *Narration:* “Most agents would blindly retry — or give up. Kernorq asks the only safe question: what does the external state say? If the operation had succeeded, it would mark it complete without a second write — idempotency, not a duplicate task.”
+- *Proof:* `RECOVERY_STARTED {category: UNKNOWN}`, `RECOVERY_SELECTED {recovery_action: RETRY, external_state: NOT_FOUND}`, `operation_id` unchanged across attempts.
 
-# 4. Planning
+**2:32–2:48 — Autonomous recovery**
+- *Visual:* `↻ Recovery: RETRY — Attempt 2 / 3` + `TASK STARTED` for same `operation_id: a1b2c3…` (first 12 chars shown, stable) + `VERIFICATION PASSED` on second try.
+- *Narration:* “It recovers alone. Same operation ID — no duplicate upload, no duplicate notification. Bounded retry — never infinite.”
+- *Proof:* `attempt_count: 1 → 2`, `max_attempts: 3`, `recovery_history` shows one entry, `operation_id` identical.
 
-Target duration:
+**2:48–2:58 — Continue execution (same run, not a restart)**
+- *Visual:* `5 Generate final artifact ✓ SUCCESS → 6 Run final verification ✓ SUCCESS` appear in the SAME timeline, same `execution_id`.
+- *Narration:* “Same execution, continued — not a manual restart.”
+- *Proof:* Timeline shows `RETRY_STARTED` inside the same event stream, no new `execution_id`.
 
-0:35 - 0:55
+**2:58–3:20 — Verified completion**
+- *Visual:* Full-screen `KERNORQ — WORKLOAD COMPLETED` — `✓ 22 / 22 tasks completed` (or `6/6` for the short demo workload, depending on which objective you record — pick one and keep it consistent) + `✓ Priority scheduling ✓ Deadline-aware ✓ Dependency enforcement ✓ Real tool execution ✓ Verification complete` + `Execution order: 13 → 17 → 18 → 3 → 6 → …` (from `planned_order`/`completed_at`), `Execution ID: exec_…` + `TEST SUITE: 12 passed · 0 failed` + `RESEARCH FINDINGS` / `COMPETITOR BOARD` / `CAROUSEL: 5 slides` — each with `LIVE` vs `Demo fallback` badge.
+- *Narration:* “Twenty-two tasks, scheduled by priority and deadline, respecting dependencies. Research is real findings, competitors are real analysis, the carousel is a real 5-slide artifact with hook, slides, CTA and caption — all verified. No task ran before its dependency.”
+- *Proof:* Expand `Verification evidence` — `verification_results: 22`, each `verified_success`. `workload_summary` counts: `COMPLETED 22, FAILED 0`. For fallback tasks, badge reads `Demo fallback — deterministic` (honest, not masquerading as live).
 
-The agent analyzes the project.
+**3:20–3:42 — Architecture + Cloud proof (keep short)**
+- *Visual:* Quick overlay diagram + live Cloud Console:
+  `USER → WEB UI → CLOUD RUN (kernorq-00006-p6w) → ADK AGENT (Planner → Executor → Verifier → Recovery) → SQLite`  (Firestore in prod, SQLite locally — note it)
+  Then `gcloud run services describe kernorq --region us-central1` showing `Service URL: https://kernorq-…run.app`, `Image: us-central1-docker.pkg.dev/…:681c69f…`, `Traffic: 100%`. Briefly scroll Cloud Logging showing `EXECUTION_COMPLETED`.
+- *Narration:* “LLM decides what should happen. Deterministic code decides how it happens — and persists it. All running on Cloud Run, image built via Cloud Build, secrets via Secret Manager.”
+- *Proof:* Must be screen recording of real Console, not a static image.
 
-Display:
-
-- repository inspection
-- requirements discovery
-- current state
-- dependency relationships
-- generated execution plan
-
-Example:
-
-PROJECT DELIVERY PLAN
-
-1. Inspect repository
-2. Validate requirements
-3. Run tests
-4. Resolve missing requirement
-5. Regenerate required artifact
-6. Re-run verification
-7. Produce completion evidence
-
-The plan must be generated by the system.
-
----
-
-# 5. Autonomous Execution
-
-Target duration:
-
-0:55 - 1:40
-
-The agent executes several real steps.
-
-Example display:
-
-TASK 1
-Inspect repository
-SUCCESS
-
-TASK 2
-Analyze requirements
-SUCCESS
-
-TASK 3
-Run verification suite
-SUCCESS
-
-TASK 4
-Generate missing artifact
-RUNNING
-
-The UI should make it obvious that the user is not manually advancing
-the workflow.
+**3:42–3:55 — Closing (end on verified state)**
+- *Visual:* Freeze on `WORKLOAD COMPLETED` card.
+- *Narration (verbatim):* “Give it the outcome. It discovers the work. It executes the work. It verifies the work. When the first plan fails, it recovers. You do not babysit the workflow.”
+- *Hold 3s, fade to Kernorq URL and execution ID.*
 
 ---
 
-# 6. Persistent State
+### Demo Rules & Guards
 
-During execution, show enough information to establish that state is
-persisted.
+- Language: English (no subtitles needed if narration is clear).
+- No fake logs, no scripted typing animations, no manual workflow advancement.
+- Failure is deterministic: `generate_carousel/research_topic` only use fallback when Gemini returns 404/no key — never random.
+- Production flag OFF: `KERNORQ_DEMO_FAILURE` not set in Cloud Run env.
+- `uv run pytest -q` before recording: 329 passed, 2 skipped (baseline). `scripts/run_demo_workload.py` → `completed 22/22`.
+- Verify no contradictory state: `WORKLOAD COMPLETED` only when `exec.status === 'COMPLETED' && completed === total && failed === 0` (frontend already enforces this).
 
-Possible display:
+### Scoring Alignment (callouts during narration)
 
-Execution ID: exec_12345
+- *40% Innovation/Operational Utility:* “Human coordination eliminated — 22 tasks, 0 manual steps.”
+- *30% Architectural Discipline:* “Modular planner/executor/verifier/recovery, persistent state, bounded retries, idempotency via operation_id.”
+- *30% Demo/Production Readiness:* “Real execution, real failure, real recovery, reproducible, visible Cloud Run.”
 
-Status: EXECUTING
+### Recording Checklist
 
-Completed:
-- task_001
-- task_002
-- task_003
+- [ ] `demo/workloads/golden_demo.csv` present in image (`COPY demo ./demo` in Dockerfile)
+- [ ] `GET /workloads/golden` returns 22 tasks, `planned_order` dependency-aware
+- [ ] `POST /workloads/golden/run` → `COMPLETED 22/22` via real tools (fallback badges honest)
+- [ ] `GET /executions/{id}/events` shows `TASK_STARTED → CHECKPOINT → VERIFICATION → RECOVERY → RETRY` in one stream
+- [ ] Cloud Run service URL reachable, logs show `EXECUTION_COMPLETED`
+- [ ] Audio levels tested, narration English, <4:00, export 1080p MP4 for YouTube/Vimeo
 
-Current:
-- task_004
+### Appendix — Commands for the recording machine
 
-Pending:
-- task_005
-- task_006
+```bash
+uv run pytest -q
+# → 329 passed, 2 skipped
 
-This must reflect real application state.
+uv run python scripts/run_demo_workload.py
+# → planned order: ['13','3','6','4','17','18', ...] — 22/22 COMPLETED
 
----
+gcloud run services describe kernorq --region us-central1 --format="value(status.url)"
+# → https://kernorq-937607726293.us-central1.run.app
 
-# 7. The Twist: Controlled Failure
+curl -X POST https://kernorq-.../workloads/golden/run
+# → {"execution_id":"exec_…","status":"EXECUTING","planned_order": [...]}
 
-Target duration:
-
-1:40 - 2:20
-
-Introduce a deterministic failure.
-
-Example:
-
-The verification service for Task 4 returns a timeout.
-
-Display:
-
-TASK 4
-VERIFYING...
-
-ERROR
-Timeout while verifying operation.
-
-The agent must not immediately declare failure.
-
----
-
-# 8. Unknown-State Handling
-
-The system should demonstrate a realistic reliability decision.
-
-Show:
-
-Execution state uncertain.
-
-Question:
-
-"Did the previous operation actually complete?"
-
-The agent checks the external/project state.
-
-Possible result:
-
-Operation not completed.
-
-Therefore retry is safe.
-
-This demonstrates that the system understands the difference between:
-
-"request failed"
-
-and
-
-"request outcome is unknown."
-
----
-
-# 9. Autonomous Recovery
-
-Display:
-
-RECOVERY STARTED
-
-Failure:
-TIMEOUT
-
-Analysis:
-Previous operation did not complete.
-
-Recovery:
-Safe retry
-
-Attempt:
-2 / 3
-
-Then:
-
-TASK 4
-SUCCESS
-
-VERIFICATION
-PASSED
-
-The user does not manually intervene.
-
----
-
-# 10. Continue Execution
-
-The workflow continues with remaining tasks.
-
-Example:
-
-TASK 5
-Generate final artifact
-SUCCESS
-
-TASK 6
-Run final verification
-SUCCESS
-
-The recovery should be visibly part of the same execution, not a
-separate manually restarted run.
-
----
-
-# 11. Completion
-
-Target duration:
-
-2:50 - 3:15
-
-Show:
-
-PROJECT READY
-
-Requirements:
-8 / 8
-
-Verification:
-PASS
-
-Blocked tasks:
-0
-
-Recovery events:
-1
-
-Human interventions:
-0
-
-Evidence:
-6 verified artifacts
-
-The final state must be generated from the real execution state.
-
----
-
-# 12. Evidence
-
-Show a compact execution evidence panel.
-
-Example:
-
-EXECUTION EVIDENCE
-
-Execution ID
-exec_12345
-
-Tasks completed
-6 / 6
-
-Tests
-PASS
-
-Verification records
-6
-
-Recovery events
-1
-
-Final state
-VERIFIED
-
-Evidence may link to:
-
-- test output
-- generated artifact
-- repository state
-- verification result
-- execution event
-- cloud log
-
----
-
-# 13. Architecture Proof
-
-Target duration:
-
-3:15 - 3:40
-
-Briefly show the architecture:
-
-USER
-  |
-  v
-WEB UI
-  |
-  v
-CLOUD RUN
-  |
-  v
-GOOGLE ADK AGENT
-  |
-  +--> PLANNER
-  +--> EXECUTOR
-  +--> VERIFIER
-  +--> RECOVERY
-  |
-  +--> FIRESTORE
-  |
-  +--> PUB/SUB
-
-Keep this section short.
-
-The architecture exists to prove engineering discipline, not to
-replace the product demonstration.
-
----
-
-# 14. Google Cloud Proof
-
-The video must visibly demonstrate that the backend is running on
-Google Cloud.
-
-Show one or more of:
-
-- Cloud Run service
-- Cloud Run URL
-- Google Cloud Console
-- Cloud logging
-- Vertex AI / Gemini activity where applicable
-
-The proof must be real.
-
-Do not use a static screenshot as the only evidence.
-
----
-
-# 15. Closing
-
-Target duration:
-
-3:40 - 4:00
-
-Closing message:
-
-"Give it the outcome.
-
-It discovers the work.
-
-It executes the work.
-
-It verifies the work.
-
-When the first plan fails, it recovers.
-
-You do not babysit the workflow."
-
-End on the verified completion state.
-
----
-
-# 16. Demo Rules
-
-The demo must:
-
-- be in English or contain English subtitles
-- remain within the four-minute limit
-- show the real application
-- show actual execution
-- show actual failure recovery
-- show real state
-- show Google Cloud deployment
-- avoid fake logs
-- avoid scripted UI animations pretending to be execution
-- avoid manually advancing the workflow behind the scenes
-
-The final video should be recorded from a stable environment that
-can reproduce the same result.
-
----
-
-# 17. Determinism
-
-The failure scenario should be deterministic.
-
-Do not rely on:
-
-- a random internet outage
-- a third-party API randomly failing
-- unpredictable model behavior
-- a flaky external service
-
-The demo should have a controlled failure injection mechanism that
-can be enabled specifically for testing/demo.
-
-Normal production mode must not activate failure injection.
-
----
-
-# 18. Narration Principles
-
-The narration should focus on:
-
-Problem
--> Action
--> Autonomous behavior
--> Failure
--> Recovery
--> Result
-
-Avoid:
-
-- long introductions
-- generic AI explanations
-- explaining every library
-- reading code
-- excessive architecture terminology
-- feature lists
-
-The judge should understand the product within the first 30 seconds.
-
----
-
-# 19. Judge Questions the Demo Must Answer
-
-By the end of the video, a judge should be able to answer:
-
-### What problem does this solve?
-
-A human normally has to coordinate a multi-step project-delivery
-workflow manually.
-
-### What makes it autonomous?
-
-The agent discovers the required work, plans it, executes tools,
-verifies outcomes, and continues without step-by-step prompting.
-
-### What happens when things go wrong?
-
-The execution state is preserved, the failure is classified, the agent
-selects a safe recovery strategy, and the workflow continues.
-
-### Why is this technically credible?
-
-The execution layer separates reasoning from deterministic state,
-verification, retries, and recovery.
-
-### What proves it worked?
-
-The UI, execution history, verification results and Google Cloud
-telemetry provide evidence.
-
----
-
-# 20. Demo Failure Conditions
-
-The demo should visibly exercise at least one of:
-
-- timeout
-- temporary tool failure
-- verification failure
-- interrupted execution
-- unknown external state
-
-Preferred:
-
-UNKNOWN STATE AFTER TIMEOUT
-
-Reason:
-
-This demonstrates both recovery and idempotency rather than merely
-showing a simple retry.
-
----
-
-# 21. Scoring Alignment
-
-## Innovation & Operational Utility - 40%
-
-The demo must emphasize:
-
-- meaningful real-world friction
-- autonomous execution
-- multi-step workflow
-- minimal human intervention
-
-## Architectural Discipline & Tech Stack - 30%
-
-The demo must provide evidence of:
-
-- modular architecture
-- state management
-- verification
-- idempotency
-- recovery
-- secure execution
-- Google technology
-- Google Cloud deployment
-
-## Demo & Production Readiness - 30%
-
-The demo must provide:
-
-- clear problem
-- clear value proposition
-- real execution
-- real failure
-- real recovery
-- reproducible project
-- visible cloud deployment
-
----
-
-# 22. Demo Success Condition
-
-The demo is successful if a judge can watch the entire workflow and
-understand that:
-
-The human provides the outcome.
-
-The agent owns the execution.
-
-The system knows what happened.
-
-The system can recover from failure.
-
-The final outcome is verified.
-
-The judge should leave thinking:
-
-"It did not just tell me how to finish the work.
-
-It actually finished the work."
-
----
-
-# 23. Demo Development Priority
-
-When implementing features, prioritize in this order:
-
-1. Autonomous execution
-2. Verification
-3. Failure recovery
-4. Persistent state
-5. Evidence
-6. Cloud deployment proof
-7. UI polish
-
-Do not sacrifice execution reliability for visual polish.
-
----
-
-# 24. Final Demo Checklist
-
-Before recording:
-
-[ ] Real objective input
-[ ] Generated plan
-[ ] Multiple real tool actions
-[ ] Persistent execution state
-[ ] Real verification
-[ ] Deterministic failure
-[ ] Autonomous recovery
-[ ] Idempotency/unknown-state handling
-[ ] Continued execution
-[ ] Verified final result
-[ ] Evidence panel
-[ ] Google Cloud proof
-[ ] Architecture explanation
-[ ] English narration/subtitles
-[ ] Under 4 minutes
-[ ] Public YouTube/Vimeo upload planned
-
----
-
-# 25. Demo North Star
-
-The strongest moment in the demo is not:
-
-"Look how smart the AI is."
-
-It is:
-
-"The workflow broke.
-
-The agent knew what state it was in.
-
-It recovered safely.
-
-And the work still finished."
+# In UI: click ▶ Run Workload → watch KERNORQ IS ORCHESTRATING → WORKLOAD COMPLETED
+```

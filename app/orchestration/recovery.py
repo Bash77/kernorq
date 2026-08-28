@@ -75,6 +75,11 @@ PERMANENT_ERROR_TYPES = {
     "DuplicateToolError",
     "NotFoundError",
     "InvalidStateTransitionError",
+    # Deterministic tool-precondition failures: retrying cannot change the
+    # outcome because the required project state does not exist.
+    "NoTestSuiteFound",
+    "PytestNotAvailable",
+    "InvalidPathError",
 }
 
 
@@ -94,26 +99,25 @@ def classify_failure(task: Task) -> FailureCategory:
         return FailureCategory.UNKNOWN
     if task.error and task.error.get("type") in {"TimeoutError", "UnknownStateError"}:
         return FailureCategory.UNKNOWN
-    # Check verifier evidence for UNKNOWN flag
-    if task.verification and task.verification.status == VerificationStatus.UNKNOWN:
-        return FailureCategory.UNKNOWN
-    # If verification marked UNKNOWN via evidence, treat as UNKNOWN
-    if task.verification and task.verification.evidence.get("error_type") in {"TimeoutError"}:
-        # Only if status is UNKNOWN, already handled; this is extra safety
-        pass
 
-    # PERMANENT
+    def _is_permanent(err: Any) -> bool:
+        return isinstance(err, dict) and err.get("type") in PERMANENT_ERROR_TYPES
+
+    # PERMANENT — check every surface that carries the error identity:
+    # verifier evidence (post-verification path), task.error (executor path),
+    # and raw tool result (executor stores result before failing).
     if task.verification and task.verification.status == VerificationStatus.VERIFIED_FAILURE:
         ev = task.verification.evidence
-        err = ev.get("error") if isinstance(ev, dict) else None
-        if isinstance(err, dict) and err.get("type") in PERMANENT_ERROR_TYPES:
-            return FailureCategory.PERMANENT
-        if task.error and task.error.get("type") in PERMANENT_ERROR_TYPES:
-            return FailureCategory.PERMANENT
-        # If verification says failure but error type is explicitly permanent
-        # otherwise fall through to TRANSIENT
-
-    if task.error and task.error.get("type") in PERMANENT_ERROR_TYPES:
+        if isinstance(ev, dict):
+            if _is_permanent(ev.get("error")):
+                return FailureCategory.PERMANENT
+            if ev.get("error_type") in PERMANENT_ERROR_TYPES:
+                return FailureCategory.PERMANENT
+            if ev.get("explicit_outcome") == "NO_TEST_SUITE_FOUND":
+                return FailureCategory.PERMANENT
+    if _is_permanent(task.error):
+        return FailureCategory.PERMANENT
+    if isinstance(task.result, dict) and _is_permanent(task.result.get("error")):
         return FailureCategory.PERMANENT
 
     return FailureCategory.TRANSIENT
